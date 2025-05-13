@@ -62,6 +62,8 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { createClient } from '@supabase/supabase-js';
 import TrainingDataPreview from "@/components/TrainingDataPreview";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
 
 const supabaseUrl = 'https://rlwmcbdqfusyhhqgwxrz.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsd21jYmRxZnVzeWhocWd3eHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMzAzMzMsImV4cCI6MjA2MjcwNjMzM30.96HbYy6EfaY2snPjvcO6hT2E-pVCFOvSz5anC3GYVQ8';
@@ -84,6 +86,9 @@ const TrainingData = () => {
   const [editingItem, setEditingItem] = useState<TrainingItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [tableFile, setTableFile] = useState<File | null>(null);
+  const [tablePreview, setTablePreview] = useState<any[][]>([]);
+  const [tableFileError, setTableFileError] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<TrainingItem | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
@@ -104,6 +109,10 @@ const TrainingData = () => {
     setNewItemUrl("");
     setNewItemContent("");
     setActiveTab("url");
+    setPdfFile(null);
+    setTableFile(null);
+    setTablePreview([]);
+    setTableFileError("");
   };
 
   const handleAddTrainingData = async () => {
@@ -156,6 +165,43 @@ const TrainingData = () => {
         return;
       } catch (err) {
         toast.error("Unexpected error uploading PDF");
+        return;
+      }
+    }
+
+    if (activeTab === 'table') {
+      if (!tableFile) {
+        toast.error("Please select a table/CSV/Excel file to upload");
+        return;
+      }
+      try {
+        const fileExt = tableFile.name.split('.').pop();
+        const filePath = `${client.id}/${Date.now()}_${newItemName.replace(/\s+/g, '_')}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('training_data').upload(filePath, tableFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+        if (error) {
+          toast.error("Failed to upload table file: " + error.message);
+          return;
+        }
+        const { data: publicUrlData } = supabase.storage.from('training_data').getPublicUrl(filePath);
+        const fileUrl = publicUrlData?.publicUrl;
+        if (!fileUrl) {
+          toast.error("Failed to get public URL for uploaded table file");
+          return;
+        }
+        addTrainingData(client.id, {
+          type: 'table',
+          name: newItemName,
+          fileUrl
+        });
+        setIsAddDialogOpen(false);
+        resetAddForm();
+        mockTrainingProcess();
+        return;
+      } catch (err) {
+        toast.error("Unexpected error uploading table file");
         return;
       }
     }
@@ -286,6 +332,8 @@ const TrainingData = () => {
         return 'PDF Document';
       case 'text':
         return 'Text Content';
+      case 'table':
+        return 'Table/CSV/Excel';
     }
   };
 
@@ -316,7 +364,7 @@ const TrainingData = () => {
               </DialogHeader>
               
               <Tabs defaultValue="url" value={activeTab} onValueChange={(value) => setActiveTab(value as TrainingDataType)}>
-                <TabsList className="grid grid-cols-3 mb-4">
+                <TabsList className="grid grid-cols-4 mb-4">
                   <TabsTrigger value="url" className="flex items-center">
                     <Globe className="mr-2 h-4 w-4" /> Website URL
                   </TabsTrigger>
@@ -325,6 +373,9 @@ const TrainingData = () => {
                   </TabsTrigger>
                   <TabsTrigger value="text" className="flex items-center">
                     <Type className="mr-2 h-4 w-4" /> Text Content
+                  </TabsTrigger>
+                  <TabsTrigger value="table" className="flex items-center">
+                    <FileText className="mr-2 h-4 w-4" /> Table/CSV/Excel
                   </TabsTrigger>
                 </TabsList>
                 
@@ -395,6 +446,74 @@ const TrainingData = () => {
                       />
                       <p className="text-sm text-gray-500">
                         Directly input text content like product descriptions, FAQs, or company information.
+                      </p>
+                    </div>
+                  </TabsContent>
+                
+                  <TabsContent value="table" className="space-y-4 mt-0">
+                    <div className="grid gap-2">
+                      <Label htmlFor="table">Upload Table/CSV/Excel</Label>
+                      <div className="border-2 border-dashed border-gray-200 rounded-md p-6 flex flex-col items-center justify-center">
+                        <FileUp className="h-8 w-8 text-gray-400 mb-2" />
+                        <p className="text-sm text-gray-500 mb-2">
+                          Drag and drop a CSV or Excel file, or click to browse
+                        </p>
+                        <input
+                          type="file"
+                          accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                          style={{ display: 'none' }}
+                          id="table-upload-input"
+                          onChange={async e => {
+                            setTableFileError("");
+                            setTablePreview([]);
+                            if (e.target.files && e.target.files[0]) {
+                              const file = e.target.files[0];
+                              setTableFile(file);
+                              const ext = file.name.split('.').pop()?.toLowerCase();
+                              try {
+                                if (ext === 'csv') {
+                                  const text = await file.text();
+                                  const parsed = Papa.parse(text, { header: false });
+                                  setTablePreview(parsed.data as any[][]);
+                                } else if (ext === 'xlsx' || ext === 'xls') {
+                                  const data = await file.arrayBuffer();
+                                  const workbook = XLSX.read(data, { type: 'array' });
+                                  const sheetName = workbook.SheetNames[0];
+                                  const worksheet = workbook.Sheets[sheetName];
+                                  const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                                  setTablePreview(json as any[][]);
+                                } else {
+                                  setTableFileError('Unsupported file type');
+                                }
+                              } catch (err) {
+                                setTableFileError('Failed to parse file');
+                              }
+                            }
+                          }}
+                        />
+                        <Button variant="outline" size="sm" onClick={() => document.getElementById('table-upload-input')?.click()}>
+                          {tableFile ? tableFile.name : 'Select File'}
+                        </Button>
+                      </div>
+                      {tableFileError && <p className="text-sm text-red-500">{tableFileError}</p>}
+                      {tablePreview.length > 0 && (
+                        <div className="overflow-x-auto border rounded mt-2 max-h-40">
+                          <table className="min-w-full text-xs">
+                            <tbody>
+                              {tablePreview.slice(0, 10).map((row, i) => (
+                                <tr key={i}>
+                                  {row.map((cell, j) => (
+                                    <td key={j} className="border px-2 py-1">{cell}</td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {tablePreview.length > 10 && <div className="text-xs text-gray-400 px-2 py-1">Previewing first 10 rows</div>}
+                        </div>
+                      )}
+                      <p className="text-sm text-gray-500">
+                        CSV and Excel files will be processed and their content extracted for training.
                       </p>
                     </div>
                   </TabsContent>

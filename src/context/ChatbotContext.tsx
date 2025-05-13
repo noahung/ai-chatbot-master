@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export type TrainingDataType = 'text' | 'pdf' | 'url';
+export type TrainingDataType = 'text' | 'pdf' | 'url' | 'table';
 
 export interface TrainingItem {
   id: string;

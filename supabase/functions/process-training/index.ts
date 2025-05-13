@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+import { extractTextFromPDF } from "./pdf-utils.ts";
 
 // Helper function to extract contact information using regex
 function extractContactInfo(text: string) {
@@ -275,15 +276,85 @@ ${faqs.map((faq: any) => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n')}
       }
     }
 
-    // Process PDF training data (placeholder for now)
+    // Process PDF training data
     const pdfItems = trainingData.filter((item: any) => item.type === 'pdf' && item.file_url);
     for (const item of pdfItems) {
-      console.log(`Processing PDF: ${item.file_url}`);
-      // In a real implementation, you would:
-      // 1. Download PDF
-      // 2. Extract text
-      // 3. Update the content field in the database
-      processedItems.push(item.id);
+      try {
+        console.log(`Processing PDF: ${item.file_url}`);
+        if (item.content && item.content.length > 100) {
+          processedItems.push(item.id);
+          continue;
+        }
+        const pdfText = await extractTextFromPDF(item.file_url);
+        const contactInfo = extractContactInfo(pdfText);
+        let formattedContent = `PDF CONTENT:\n${pdfText.substring(0, 10000)}\n`;
+        if (contactInfo.emails.length > 0 || contactInfo.phones.length > 0 || contactInfo.addresses.length > 0) {
+          formattedContent += `\nCONTACT INFORMATION:\n`;
+          if (contactInfo.emails.length > 0) formattedContent += `Emails: ${contactInfo.emails.join(', ')}\n`;
+          if (contactInfo.phones.length > 0) formattedContent += `Phone Numbers: ${contactInfo.phones.join(', ')}\n`;
+          if (contactInfo.addresses.length > 0) formattedContent += `Addresses: ${contactInfo.addresses.join('; ')}\n`;
+        }
+        const { error: updateError } = await supabase
+          .from("training_data")
+          .update({ content: formattedContent })
+          .eq("id", item.id);
+        if (updateError) {
+          console.error(`Failed to update PDF content for ${item.id}: ${updateError.message}`);
+        } else {
+          processedItems.push(item.id);
+        }
+      } catch (err) {
+        console.error(`Error processing PDF ${item.file_url}:`, err);
+      }
+    }
+
+    // Process Table/CSV/Excel training data
+    const tableItems = trainingData.filter((item: any) => item.type === 'table' && item.file_url);
+    for (const item of tableItems) {
+      try {
+        console.log(`Processing Table: ${item.file_url}`);
+        if (item.content && item.content.length > 100) {
+          processedItems.push(item.id);
+          continue;
+        }
+        const response = await fetch(item.file_url);
+        if (!response.ok) throw new Error('Failed to fetch table file');
+        const ext = item.file_url.split('.').pop()?.toLowerCase();
+        let tableText = '';
+        if (ext === 'csv') {
+          const csv = await response.text();
+          tableText = csv;
+        } else if (ext === 'xlsx' || ext === 'xls') {
+          const arrayBuffer = await response.arrayBuffer();
+          const XLSX = await import('npm:xlsx');
+          const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const csv = XLSX.utils.sheet_to_csv(worksheet);
+          tableText = csv;
+        } else {
+          throw new Error('Unsupported table file type');
+        }
+        const contactInfo = extractContactInfo(tableText);
+        let formattedContent = `TABLE DATA (CSV):\n${tableText.substring(0, 10000)}\n`;
+        if (contactInfo.emails.length > 0 || contactInfo.phones.length > 0 || contactInfo.addresses.length > 0) {
+          formattedContent += `\nCONTACT INFORMATION:\n`;
+          if (contactInfo.emails.length > 0) formattedContent += `Emails: ${contactInfo.emails.join(', ')}\n`;
+          if (contactInfo.phones.length > 0) formattedContent += `Phone Numbers: ${contactInfo.phones.join(', ')}\n`;
+          if (contactInfo.addresses.length > 0) formattedContent += `Addresses: ${contactInfo.addresses.join('; ')}\n`;
+        }
+        const { error: updateError } = await supabase
+          .from("training_data")
+          .update({ content: formattedContent })
+          .eq("id", item.id);
+        if (updateError) {
+          console.error(`Failed to update table content for ${item.id}: ${updateError.message}`);
+        } else {
+          processedItems.push(item.id);
+        }
+      } catch (err) {
+        console.error(`Error processing Table ${item.file_url}:`, err);
+      }
     }
 
     // Return success response
@@ -302,4 +373,4 @@ ${faqs.map((faq: any) => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n')}
       headers: { "Content-Type": "application/json" }
     });
   }
-}); 
+});

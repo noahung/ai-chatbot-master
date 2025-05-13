@@ -134,6 +134,8 @@ const TrainingDataPreview = ({ trainingItem, className }: TrainingDataPreviewPro
         return <FileText className="h-4 w-4" />;
       case 'text':
         return <Type className="h-4 w-4" />;
+      case 'table':
+        return <FileText className="h-4 w-4" />;
       default:
         return <FileText className="h-4 w-4" />;
     }
@@ -158,7 +160,8 @@ const TrainingDataPreview = ({ trainingItem, className }: TrainingDataPreviewPro
           </div>
           <Badge variant="outline">
             {trainingItem.type === 'url' ? 'Website URL' : 
-             trainingItem.type === 'pdf' ? 'PDF Document' : 'Text Content'}
+             trainingItem.type === 'pdf' ? 'PDF Document' : 
+             trainingItem.type === 'table' ? 'Table/CSV/Excel' : 'Text Content'}
           </Badge>
         </div>
         <CardDescription>
@@ -344,4 +347,4 @@ const TrainingDataPreview = ({ trainingItem, className }: TrainingDataPreviewPro
   );
 };
 
-export default TrainingDataPreview; 
+export default TrainingDataPreview;
