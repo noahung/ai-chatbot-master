@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useChatbot } from "@/context/ChatbotContext";
+import { useChatbot, ChatbotSettings } from "@/context/ChatbotContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,19 +51,31 @@ const Integration = () => {
 
   // Generate the embed code based on client settings
   const generateEmbedCode = () => {
+    // Create a settings object with defaults for undefined values
+    const settings: Partial<ChatbotSettings> = client.settings || {};
+    const primaryColor = settings.primaryColor || '#2563eb';
+    const secondaryColor = settings.secondaryColor || '#ffffff';
+    const position = settings.position || 'bottom-right';
+    const welcomeMessage = settings.welcomeMessage || 'Hello! How can I help you today?';
+    const placeholderText = settings.placeholderText || 'Ask me anything...';
+    const chatbotName = settings.name || 'AI Assistant';
+    const logo = settings.logo || '';
+    const apiKey = client.apiKey || '';
+
     const scriptCode = `<script>
   (function() {
     const script = document.createElement('script');
     script.src = 'https://noahung.github.io/ai-chatbot-master/embed.js';
     script.async = true;
     script.dataset.clientId = '${client.id}';
-    script.dataset.primaryColor = '${client.settings.primaryColor}';
-    script.dataset.secondaryColor = '${client.settings.secondaryColor}';
-    script.dataset.position = '${client.settings.position}';
-    script.dataset.welcomeMessage = "${client.settings.welcomeMessage.replace(/"/g, '&quot;')}";
-    script.dataset.placeholderText = "${client.settings.placeholderText.replace(/"/g, '&quot;')}";
-    script.dataset.chatbotName = "${client.settings.name.replace(/"/g, '&quot;')}";
-    script.dataset.logo = '${client.settings.logo || ''}';
+    script.dataset.primaryColor = '${primaryColor}';
+    script.dataset.secondaryColor = '${secondaryColor}';
+    script.dataset.position = '${position}';
+    script.dataset.welcomeMessage = "${welcomeMessage.replace(/"/g, '&quot;')}";
+    script.dataset.placeholderText = "${placeholderText.replace(/"/g, '&quot;')}";
+    script.dataset.chatbotName = "${chatbotName.replace(/"/g, '&quot;')}";
+    script.dataset.logo = '${logo}';
+    script.dataset.apiKey = '${apiKey}';
     document.head.appendChild(script);
   })();
 </script>`;
@@ -73,12 +85,16 @@ const Integration = () => {
 
   // Generate the product-specific code
   const generateProductCode = () => {
+    // Create a settings object with defaults for undefined values
+    const settings: Partial<ChatbotSettings> = client.settings || {};
+    const primaryColor = settings.primaryColor || '#2563eb';
+
     const buttonCode = `<button 
   class="chatflow-product-button" 
   data-client-id="${client.id}" 
   data-product-id="${productId}" 
   data-product-name="${productName}"
-  style="background-color: ${client.settings.primaryColor}; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+  style="background-color: ${primaryColor}; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
 >
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"/>

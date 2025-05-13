@@ -68,12 +68,37 @@ export const ChatbotProvider = ({ children }: { children: ReactNode }) => {
     if (!clientRows) return;
     const { data: settingsRows } = await (supabase.from('chatbot_settings') as any).select('*');
     const { data: trainingRows } = await (supabase.from('training_data') as any).select('*');
-    const clientsWithDetails: Client[] = clientRows.map((client: any) => ({
-      ...client,
-      createdAt: new Date(client.created_at),
-      settings: settingsRows?.find((s: any) => s.client_id === client.id) || {},
-      trainingData: (trainingRows || []).filter((t: any) => t.client_id === client.id).map((t: any) => ({ ...t, createdAt: new Date(t.created_at) })),
-    }));
+    
+    const clientsWithDetails: Client[] = clientRows.map((client: any) => {
+      // Find settings for this client or create default settings
+      const clientSettings = settingsRows?.find((s: any) => s.client_id === client.id);
+      
+      // Create a properly typed settings object with defaults
+      const settings: ChatbotSettings = {
+        id: clientSettings?.id || '',
+        clientId: client.id,
+        name: clientSettings?.name || `${client.name}'s Chatbot`,
+        primaryColor: clientSettings?.primary_color || '#2563eb',
+        secondaryColor: clientSettings?.secondary_color || '#ffffff',
+        welcomeMessage: clientSettings?.welcome_message || 'Hello! How can I help you today?',
+        placeholderText: clientSettings?.placeholder_text || 'Ask me anything...',
+        position: clientSettings?.position || 'bottom-right',
+        logo: clientSettings?.logo || undefined
+      };
+      
+      return {
+        ...client,
+        createdAt: new Date(client.created_at),
+        settings: settings,
+        trainingData: (trainingRows || [])
+          .filter((t: any) => t.client_id === client.id)
+          .map((t: any) => ({ 
+            ...t, 
+            createdAt: new Date(t.created_at) 
+          })),
+      };
+    });
+    
     setClients(clientsWithDetails);
   };
 

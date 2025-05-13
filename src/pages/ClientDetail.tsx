@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useChatbot } from "@/context/ChatbotContext";
@@ -9,10 +8,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { availableModels } from "@/types/models";
-import { FileText, Settings, Code, Bot, Globe, BrainCircuit, Check } from "lucide-react";
+import { FileText, Settings, Code, Bot, Globe, BrainCircuit, Check, ArrowLeft, MessageSquare } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import ChatbotPreview from "@/components/ChatbotPreview";
 
 const ClientDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -55,185 +55,149 @@ const ClientDetail = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <Button variant="ghost" onClick={() => navigate("/dashboard/clients")} className="mr-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
           <h1 className="text-3xl font-bold">{client.name}</h1>
-          <p className="text-gray-500">{client.website}</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/preview/${client.id}`)}>
-            <Bot className="mr-2 h-4 w-4" /> Preview Chatbot
-          </Button>
-          <Button onClick={handleSave}>
-            <Check className="mr-2 h-4 w-4" /> Save Changes
-          </Button>
         </div>
       </div>
-
-      <Separator />
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Client Information</CardTitle>
-              <CardDescription>
-                Basic information about your client
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Client Name</Label>
-                <Input
-                  id="name"
-                  placeholder="Acme Corporation"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="website">Website URL</Label>
-                <Input
-                  id="website"
-                  placeholder="https://example.com"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
+      
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="preview">Chatbot Preview</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Client Information</CardTitle>
+                <CardDescription>Basic details about this client</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div>
+                  <span className="font-medium">Name:</span> {client.name}
+                </div>
+                <div>
+                  <span className="font-medium">Website:</span> <a href={client.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center">
+                    {client.website} <Globe className="h-3 w-3 ml-1" />
+                  </a>
+                </div>
+                <div>
+                  <span className="font-medium">AI Model:</span> {client.model}
+                </div>
+                <div>
+                  <span className="font-medium">Created:</span> {client.createdAt.toLocaleDateString()}
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button variant="outline" onClick={() => navigate(`/dashboard/clients/${client.id}/edit`)}>
+                  Edit Client
+                </Button>
+              </CardFooter>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Chatbot Configuration</CardTitle>
+                <CardDescription>Settings for the client's AI chatbot</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div>
+                  <span className="font-medium">Chatbot Name:</span> {client.settings.name}
+                </div>
+                <div className="flex items-center">
+                  <span className="font-medium mr-2">Primary Color:</span> 
+                  <div className="w-4 h-4 rounded-full mr-1" style={{ backgroundColor: client.settings.primaryColor }}></div>
+                  {client.settings.primaryColor}
+                </div>
+                <div>
+                  <span className="font-medium">Position:</span> {client.settings.position.replace('-', ' ')}
+                </div>
+                <div>
+                  <span className="font-medium">Welcome Message:</span> {client.settings.welcomeMessage}
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button variant="outline" onClick={() => navigate(`/dashboard/clients/${client.id}/settings`)}>
+                  <Settings className="mr-2 h-4 w-4" /> Customize Chatbot
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
           
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>AI Configuration</CardTitle>
-              <CardDescription>
-                Configure the AI model and API key for this client
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="model">AI Model</Label>
-                <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableModels.map((model) => (
-                      <SelectItem key={model.id} value={model.value}>
-                        {model.name} - {model.description}
-                      </SelectItem>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Training Data</CardTitle>
+                <CardDescription>Knowledge sources for the AI</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {client.trainingData.length > 0 ? (
+                  <div className="space-y-2">
+                    {client.trainingData.slice(0, 5).map((item) => (
+                      <div key={item.id} className="flex items-center p-2 border rounded-md">
+                        <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                        <span>{item.name}</span>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="apiKey">OpenAI API Key (Optional)</Label>
-                <Input
-                  id="apiKey"
-                  type="password"
-                  placeholder="sk-..."
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
-                <p className="text-sm text-gray-500">
-                  If provided, this key will be used instead of the default one. 
-                  Make sure it has access to the selected model.
+                    {client.trainingData.length > 5 && (
+                      <div className="text-sm text-gray-500 mt-2">
+                        + {client.trainingData.length - 5} more items
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <p className="text-gray-500 mb-4">No training data added yet</p>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter>
+                <Button onClick={() => navigate(`/dashboard/clients/${client.id}/training`)}>
+                  Manage Training Data
+                </Button>
+              </CardFooter>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Integration</CardTitle>
+                <CardDescription>Add the chatbot to your website</CardDescription>
+              </CardHeader>
+              <CardContent className="text-center py-6">
+                <MessageSquare className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 mb-4">
+                  Get the code snippet to add this chatbot to your website
                 </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div>
+              </CardContent>
+              <CardFooter className="justify-center">
+                <Button onClick={() => navigate(`/dashboard/clients/${client.id}/integration`)}>
+                  View Integration Code
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        <TabsContent value="preview">
           <Card>
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle>Chatbot Preview</CardTitle>
               <CardDescription>
-                Manage your client's chatbot
+                This is how your chatbot will appear to users. Try asking it questions!
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" 
-                onClick={() => navigate(`/dashboard/clients/${client.id}/training`)}>
-                <FileText className="mr-2 h-4 w-4" />
-                Training Data
-              </Button>
-              <Button variant="outline" className="w-full justify-start"
-                onClick={() => navigate(`/dashboard/clients/${client.id}/settings`)}>
-                <Settings className="mr-2 h-4 w-4" />
-                Chatbot Settings
-              </Button>
-              <Button variant="outline" className="w-full justify-start"
-                onClick={() => navigate(`/dashboard/clients/${client.id}/integration`)}>
-                <Code className="mr-2 h-4 w-4" />
-                Integration
-              </Button>
-              <Button variant="outline" className="w-full justify-start"
-                onClick={() => navigate(`/preview/${client.id}`)}>
-                <Bot className="mr-2 h-4 w-4" />
-                Preview Chatbot
-              </Button>
-              <Button variant="outline" className="w-full justify-start"
-                onClick={() => window.open(client.website, '_blank')}>
-                <Globe className="mr-2 h-4 w-4" />
-                Visit Website
-              </Button>
+            <CardContent className="flex justify-center py-6">
+              <ChatbotPreview client={client} className="w-full max-w-md" />
             </CardContent>
           </Card>
-          
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Chatbot Status</CardTitle>
-              <CardDescription>
-                Overview of your chatbot setup
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center">
-                    <FileText className="h-4 w-4 text-gray-500 mr-2" />
-                    <span className="text-sm">Training Data</span>
-                  </div>
-                  <Badge variant={client.trainingData.length > 0 ? "success" : "secondary"}>
-                    {client.trainingData.length} items
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center">
-                    <Settings className="h-4 w-4 text-gray-500 mr-2" />
-                    <span className="text-sm">Chatbot Configured</span>
-                  </div>
-                  <Badge variant={client.settings ? "success" : "secondary"}>
-                    {client.settings ? "Yes" : "No"}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center">
-                    <BrainCircuit className="h-4 w-4 text-gray-500 mr-2" />
-                    <span className="text-sm">AI Model</span>
-                  </div>
-                  <Badge variant="outline">
-                    {availableModels.find(m => m.value === client.model)?.name || client.model}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center">
-                    <Code className="h-4 w-4 text-gray-500 mr-2" />
-                    <span className="text-sm">Integration Status</span>
-                  </div>
-                  <Badge variant="secondary">
-                    Not Deployed
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

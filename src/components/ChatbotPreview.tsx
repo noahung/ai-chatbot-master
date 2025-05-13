@@ -1,60 +1,66 @@
-
-import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useChatbot } from "@/context/ChatbotContext";
+import { useState } from "react";
+import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  ArrowLeft, 
-  Bot, 
-  Send, 
-  X, 
-  MessageSquare,
-  Loader2,
-  Code
-} from "lucide-react";
-import { ChatMessage } from "@/types/models";
+import { Client } from "@/context/ChatbotContext";
 
-const ChatbotPreview = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { getClient } = useChatbot();
-  
-  const client = getClient(id || "");
-  const [chatOpen, setChatOpen] = useState(false);
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+}
+
+interface ChatbotPreviewProps {
+  client: Client;
+  className?: string;
+}
+
+const ChatbotPreview = ({ client, className }: ChatbotPreviewProps) => {
   const [message, setMessage] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [showExitButton, setShowExitButton] = useState(true);
-  
-  useEffect(() => {
-    // Initialize with welcome message
-    if (client) {
-      setMessages([
-        {
-          id: "welcome",
-          role: "assistant",
-          content: client.settings.welcomeMessage || "Hello! How can I help you today?",
-          timestamp: new Date()
-        }
-      ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: client.settings.welcomeMessage,
+      timestamp: new Date()
     }
-  }, [client]);
-  
-  if (!client) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
-        <h1 className="text-3xl font-bold mb-2">Client Not Found</h1>
-        <p className="text-gray-500 mb-4">The client you're looking for doesn't exist.</p>
-        <Button onClick={() => navigate("/dashboard/clients")}>
-          Back to Clients
-        </Button>
-      </div>
-    );
-  }
+  ]);
+  const [isTyping, setIsTyping] = useState(false);
 
-  const handleSendMessage = () => {
-    if (!message.trim()) return;
+  // Build system prompt with training data context
+  const buildSystemPrompt = () => {
+    let systemPrompt = `You are a helpful assistant for ${client.name}.`;
+    
+    // Add training data context if available
+    if (client.trainingData && client.trainingData.length > 0) {
+      systemPrompt += `\nUse the following information to answer questions about the client and their products/services.`;
+      systemPrompt += `\nIf the information doesn't contain an answer to the user's question, be honest and say you don't know.`;
+      systemPrompt += `\n\nCLIENT INFORMATION:`;
+      
+      // Process different types of training data
+      client.trainingData.forEach(item => {
+        systemPrompt += `\n\n--- ${item.name} ---\n`;
+        
+        if (item.content) {
+          systemPrompt += `${item.content}\n`;
+        }
+        
+        if (item.url) {
+          systemPrompt += `Source URL: ${item.url}\n`;
+        }
+        
+        if (item.fileUrl) {
+          systemPrompt += `Document: ${item.fileUrl}\n`;
+        }
+      });
+    }
+    
+    return systemPrompt;
+  };
+
+  const handleSendMessage = async () => {
+    if (!message.trim() || isTyping) return;
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -69,210 +75,162 @@ const ChatbotPreview = () => {
     // Simulate AI typing
     setIsTyping(true);
     
-    // Simulate AI response delay
-    setTimeout(() => {
-      // Mock AI response based on user question
-      let response = "I'm an AI assistant trained to help with questions about this company and its products or services.";
+    try {
+      // Prepare message history for API call
+      const systemPrompt = buildSystemPrompt();
+      const messageHistory = [
+        { role: "system", content: systemPrompt },
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: "user", content: userMessage.content }
+      ];
       
-      // Basic keyword detection for demo purposes
-      const lowercaseMessage = message.toLowerCase();
-      if (lowercaseMessage.includes("price") || lowercaseMessage.includes("cost")) {
-        response = "Our pricing varies depending on the specific product or service you're interested in. Could you let me know which product you're asking about?";
-      } else if (lowercaseMessage.includes("contact") || lowercaseMessage.includes("support")) {
-        response = "You can contact our support team at support@example.com or call us at (555) 123-4567 during business hours.";
-      } else if (lowercaseMessage.includes("shipping") || lowercaseMessage.includes("delivery")) {
-        response = "We typically process and ship orders within 1-2 business days. Standard shipping usually takes 3-5 business days to arrive, while express shipping is 1-2 days.";
-      } else if (lowercaseMessage.includes("return") || lowercaseMessage.includes("refund")) {
-        response = "Our return policy allows returns within 30 days of purchase for a full refund. Items must be in their original condition.";
+      // If client has an API key, use it to call OpenAI
+      if (client.apiKey) {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${client.apiKey}`
+          },
+          body: JSON.stringify({
+            model: client.model || "gpt-3.5-turbo",
+            messages: messageHistory,
+            max_tokens: 500
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('OpenAI API error');
+        }
+        
+        const data = await response.json();
+        const aiReply = data.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
+        
+        // Add AI response
+        const botMessage: ChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: aiReply,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        // Fallback to mock responses if no API key
+        // Basic keyword detection for demo purposes
+        let response = "I'm an AI assistant trained to help with questions about this company and its products or services.";
+        
+        const lowercaseMessage = userMessage.content.toLowerCase();
+        if (lowercaseMessage.includes("price") || lowercaseMessage.includes("cost")) {
+          response = "Our pricing varies depending on the specific product or service you're interested in. Could you let me know which product you're asking about?";
+        } else if (lowercaseMessage.includes("contact") || lowercaseMessage.includes("support")) {
+          response = "You can contact our support team at support@example.com or call us at (555) 123-4567 during business hours.";
+        } else if (lowercaseMessage.includes("shipping") || lowercaseMessage.includes("delivery")) {
+          response = "We typically process and ship orders within 1-2 business days. Standard shipping usually takes 3-5 business days to arrive, while express shipping is 1-2 days.";
+        } else if (lowercaseMessage.includes("return") || lowercaseMessage.includes("refund")) {
+          response = "Our return policy allows returns within 30 days of purchase for a full refund. Items must be in their original condition.";
+        }
+        
+        // Add AI response
+        const botMessage: ChatMessage = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: response,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, botMessage]);
       }
-      
-      // Add AI response
-      const botMessage: ChatMessage = {
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      // Add error message
+      const errorMessage: ChatMessage = {
         id: Date.now().toString(),
         role: "assistant",
-        content: response,
+        content: "Sorry, I'm having trouble connecting right now. Please try again later.",
         timestamp: new Date()
       };
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  // Position the chatbot based on settings
-  const chatbotPosition = client.settings.position === "bottom-right" ? "right-4" : "left-4";
-
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey && message.trim()) {
-        handleSendMessage();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [message]);
-
   return (
-    <div className="min-h-screen w-full bg-gray-100 relative overflow-hidden">
-      {showExitButton && (
-        <div className="fixed top-4 left-4 z-50">
-          <Button 
-            variant="secondary" 
-            onClick={() => navigate(`/dashboard/clients/${client.id}`)}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" /> Exit Preview
-          </Button>
-        </div>
-      )}
-      
-      {/* Simulate a webpage */}
-      <div className="max-w-screen-lg mx-auto p-6 pt-20">
-        <div className="bg-white rounded-lg shadow-sm p-8">
-          <h1 className="text-3xl font-bold mb-6">{client.name}</h1>
-          <p className="text-gray-700 mb-6">
-            This is a preview of how your chatbot will appear on {client.name}'s website.
-            The chatbot is fully interactive in this preview.
-          </p>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-xl font-bold mb-4">Chatbot Settings</h2>
-              <ul className="space-y-2 text-sm">
-                <li><strong>Name:</strong> {client.settings.name}</li>
-                <li><strong>Position:</strong> {client.settings.position.replace('-', ' ')}</li>
-                <li><strong>Primary Color:</strong> <span className="inline-block w-4 h-4 rounded-full align-middle mr-1" style={{ backgroundColor: client.settings.primaryColor }}></span> {client.settings.primaryColor}</li>
-                <li><strong>Welcome Message:</strong> {client.settings.welcomeMessage}</li>
-              </ul>
-            </div>
-            
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h2 className="text-xl font-bold mb-4">Training Data</h2>
-              {client.trainingData.length > 0 ? (
-                <ul className="space-y-2 text-sm">
-                  {client.trainingData.slice(0, 5).map((item) => (
-                    <li key={item.id}>{item.name}</li>
-                  ))}
-                  {client.trainingData.length > 5 && (
-                    <li>+ {client.trainingData.length - 5} more items</li>
-                  )}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500">No training data added yet.</p>
-              )}
-            </div>
+    <div className={`border rounded-lg overflow-hidden shadow-sm h-[500px] flex flex-col ${className || ""}`}>
+      {/* Chat header */}
+      <div 
+        className="p-3 border-b flex items-center gap-2"
+        style={{ backgroundColor: client.settings.primaryColor, color: '#fff' }}
+      >
+        {client.settings.logo ? (
+          <img 
+            src={client.settings.logo} 
+            alt={`${client.name} logo`} 
+            className="w-6 h-6 rounded"
+          />
+        ) : (
+          <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center text-white">
+            💬
           </div>
-          
-          <div className="bg-gray-50 p-6 rounded-lg mb-8">
-            <h2 className="text-xl font-bold mb-4">Integration Code</h2>
-            <p className="mb-4">
-              To add this chatbot to your website, navigate to the Integration page 
-              and copy the embed code.
-            </p>
-            <Button 
-              onClick={() => navigate(`/dashboard/clients/${client.id}/integration`)}
-            >
-              <Code className="mr-2 h-4 w-4" /> View Integration Code
-            </Button>
-          </div>
-          
-          <div className="text-center text-gray-500 text-sm mt-12">
-            <p>👇 Click the chat icon in the bottom corner to interact with the chatbot</p>
-          </div>
-        </div>
+        )}
+        <span className="font-medium">{client.settings.name || `${client.name}'s Chatbot`}</span>
       </div>
       
-      {/* Chat toggle button */}
-      {!chatOpen && (
-        <button
-          className={`fixed bottom-4 ${chatbotPosition} z-40 w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 hover:scale-110`}
-          style={{ backgroundColor: client.settings.primaryColor }}
-          onClick={() => setChatOpen(true)}
-          aria-label="Open chat"
-        >
-          <MessageSquare className="h-6 w-6 text-white" />
-        </button>
-      )}
-      
-      {/* Chatbot window */}
-      {chatOpen && (
-        <div 
-          className={`fixed bottom-4 ${chatbotPosition} z-40 w-80 sm:w-96 rounded-lg shadow-xl overflow-hidden flex flex-col bg-white animate-fade-in`}
-          style={{ height: "500px", maxHeight: "calc(100vh - 32px)" }}
-        >
-          {/* Chat header */}
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto p-4">
+        {messages.map((msg) => (
           <div 
-            className="p-3 flex items-center justify-between"
+            key={msg.id} 
+            className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div 
+              className={`max-w-[80%] rounded-lg p-3 ${
+                msg.role === 'user' 
+                  ? 'bg-primary text-white' 
+                  : 'bg-gray-100 text-gray-800'
+              }`}
+            >
+              {msg.content}
+            </div>
+          </div>
+        ))}
+        
+        {/* AI typing indicator */}
+        {isTyping && (
+          <div className="flex justify-start mb-4">
+            <div className="flex items-center bg-gray-100 rounded-lg p-3 text-gray-500">
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <span>AI is typing...</span>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      {/* Chat input */}
+      <div className="p-3 border-t">
+        <div className="flex">
+          <Input
+            placeholder={client.settings.placeholderText || "Ask me anything..."}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="flex-1 mr-2"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            disabled={isTyping}
+          />
+          <Button 
+            size="icon"
+            onClick={handleSendMessage}
+            disabled={!message.trim() || isTyping}
             style={{ backgroundColor: client.settings.primaryColor }}
           >
-            <div className="flex items-center">
-              {client.settings.logo ? (
-                <img src={client.settings.logo} alt="Logo" className="w-6 h-6 mr-2" />
-              ) : (
-                <Bot className="h-5 w-5 mr-2 text-white" />
-              )}
-              <span className="font-medium text-white">{client.settings.name}</span>
-            </div>
-            <button 
-              className="text-white/80 hover:text-white transition-colors"
-              onClick={() => setChatOpen(false)}
-              aria-label="Close chat"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          
-          {/* Chat messages */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div 
-                  className={`max-w-[80%] rounded-lg p-3 ${
-                    msg.role === 'user' 
-                      ? 'bg-primary text-white' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            
-            {/* AI typing indicator */}
-            {isTyping && (
-              <div className="flex justify-start mb-4">
-                <div className="flex items-center bg-gray-100 rounded-lg p-3 text-gray-500">
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  <span>AI is typing...</span>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Chat input */}
-          <div className="p-3 border-t">
-            <div className="flex">
-              <Input
-                placeholder={client.settings.placeholderText || "Ask me anything..."}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                className="flex-1 mr-2"
-              />
-              <Button 
-                size="icon"
-                onClick={handleSendMessage}
-                disabled={!message.trim() || isTyping}
-                style={{ backgroundColor: client.settings.primaryColor }}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+            <Send className="h-4 w-4" />
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

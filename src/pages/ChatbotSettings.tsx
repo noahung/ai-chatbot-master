@@ -1,7 +1,6 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useChatbot } from "@/context/ChatbotContext";
+import { useChatbot, ChatbotSettings as ChatbotSettingsType } from "@/context/ChatbotContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,23 +30,26 @@ const ChatbotSettings = () => {
   
   const client = getClient(id || "");
   
-  const [name, setName] = useState("");
+  const [name, setName] = useState("AI Assistant");
   const [primaryColor, setPrimaryColor] = useState("#2563eb");
   const [secondaryColor, setSecondaryColor] = useState("#ffffff");
-  const [welcomeMessage, setWelcomeMessage] = useState("");
-  const [placeholderText, setPlaceholderText] = useState("");
+  const [welcomeMessage, setWelcomeMessage] = useState("Hello! How can I help you today?");
+  const [placeholderText, setPlaceholderText] = useState("Ask me anything...");
   const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
   const [logo, setLogo] = useState<string | undefined>(undefined);
   
   useEffect(() => {
     if (client) {
-      setName(client.settings.name);
-      setPrimaryColor(client.settings.primaryColor);
-      setSecondaryColor(client.settings.secondaryColor);
-      setWelcomeMessage(client.settings.welcomeMessage);
-      setPlaceholderText(client.settings.placeholderText);
-      setPosition(client.settings.position);
-      setLogo(client.settings.logo);
+      // Initialize with default values if settings are undefined
+      const settings: Partial<ChatbotSettingsType> = client.settings || {};
+      
+      setName(settings.name || "AI Assistant");
+      setPrimaryColor(settings.primaryColor || "#2563eb");
+      setSecondaryColor(settings.secondaryColor || "#ffffff");
+      setWelcomeMessage(settings.welcomeMessage || "Hello! How can I help you today?");
+      setPlaceholderText(settings.placeholderText || "Ask me anything...");
+      setPosition(settings.position || "bottom-right");
+      setLogo(settings.logo);
     }
   }, [client]);
   

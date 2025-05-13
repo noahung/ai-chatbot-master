@@ -12,6 +12,60 @@
   var apiKey = scriptTag.dataset.apiKey || '';
   var openAiModel = scriptTag.dataset.model || 'gpt-3.5-turbo';
 
+  // Client-specific training data
+  var clientTrainingData = null;
+  var clientName = chatbotName;
+
+  // Supabase configuration
+  var supabaseUrl = 'https://rlwmcbdqfusyhhqgwxrz.supabase.co';
+  var supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsd21jYmRxZnVzeWhocWd3eHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMzAzMzMsImV4cCI6MjA2MjcwNjMzM30.96HbYy6EfaY2snPjvcO6hT2E-pVCFOvSz5anC3GYVQ8';
+
+  // Fetch client training data
+  async function fetchClientData() {
+    if (!clientId) return;
+    
+    try {
+      // Fetch client info
+      const clientResponse = await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${clientId}&select=id,name`, {
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!clientResponse.ok) {
+        console.error('Failed to fetch client data');
+        return;
+      }
+      
+      const clientData = await clientResponse.json();
+      if (clientData && clientData.length > 0) {
+        clientName = clientData[0].name;
+      }
+      
+      // Fetch training data
+      const trainingResponse = await fetch(`${supabaseUrl}/rest/v1/training_data?client_id=eq.${clientId}&select=*`, {
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!trainingResponse.ok) {
+        console.error('Failed to fetch training data');
+        return;
+      }
+      
+      const trainingData = await trainingResponse.json();
+      if (trainingData && trainingData.length > 0) {
+        clientTrainingData = trainingData;
+        console.log(`Loaded ${trainingData.length} training items for client ${clientName}`);
+      }
+    } catch (error) {
+      console.error('Error fetching client data:', error);
+    }
+  }
+
   // Create chat container
   var chatContainer = document.createElement('div');
   chatContainer.id = 'ai-chatbot-container';
@@ -162,6 +216,9 @@
       </div>
     `;
     messagesContainer.appendChild(welcomeDiv);
+    
+    // Fetch client data in the background
+    fetchClientData();
   }
 
   // Add message to chat
@@ -222,6 +279,37 @@
     }
   }
 
+  // Build system prompt with training data context
+  function buildSystemPrompt() {
+    let systemPrompt = `You are a helpful assistant for ${clientName}.`;
+    
+    // Add training data context if available
+    if (clientTrainingData && clientTrainingData.length > 0) {
+      systemPrompt += `\nUse the following information to answer questions about the client and their products/services.`;
+      systemPrompt += `\nIf the information doesn't contain an answer to the user's question, be honest and say you don't know.`;
+      systemPrompt += `\n\nCLIENT INFORMATION:`;
+      
+      // Process different types of training data
+      clientTrainingData.forEach(item => {
+        systemPrompt += `\n\n--- ${item.name} ---\n`;
+        
+        if (item.content) {
+          systemPrompt += `${item.content}\n`;
+        }
+        
+        if (item.url) {
+          systemPrompt += `Source URL: ${item.url}\n`;
+        }
+        
+        if (item.file_url) {
+          systemPrompt += `Document: ${item.file_url}\n`;
+        }
+      });
+    }
+    
+    return systemPrompt;
+  }
+
   // Send message to OpenAI
   async function sendMessage(message) {
     if (!message.trim()) return;
@@ -236,6 +324,14 @@
       // If API key is provided, make direct call to OpenAI
       if (apiKey) {
         console.log("Making API call with key:", apiKey.substring(0, 5) + "...");
+        
+        // Build messages array with system prompt containing training data
+        const systemPrompt = buildSystemPrompt();
+        const messageHistory = [
+          { role: "system", content: systemPrompt },
+          ...messages.filter(m => m.role !== "system") // Exclude any previous system messages
+        ];
+        
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -244,7 +340,7 @@
           },
           body: JSON.stringify({
             model: openAiModel,
-            messages: messages.map(m => ({ role: m.role, content: m.content })),
+            messages: messageHistory,
             max_tokens: 500
           })
         });

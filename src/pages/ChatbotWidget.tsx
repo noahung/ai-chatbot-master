@@ -15,6 +15,7 @@ const ChatbotWidget = () => {
     },
   ]);
   const [chatOpen, setChatOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Settings from query params
   const clientId = getQueryParam("clientId");
@@ -50,14 +51,49 @@ const ChatbotWidget = () => {
     ...positionStyles,
   };
 
-  const handleSend = () => {
-    if (!message.trim()) return;
+  const handleSend = async () => {
+    if (!message.trim() || isLoading) return;
+    
+    // Add user message
+    const userMsg = message;
     setMessages((prev) => [
       ...prev,
-      { id: Date.now().toString(), role: "user", content: message },
-      { id: Date.now().toString() + "a", role: "assistant", content: "(AI response placeholder)" },
+      { id: Date.now().toString(), role: "user", content: userMsg },
     ]);
     setMessage("");
+    setIsLoading(true);
+    
+    try {
+      // Call the Supabase Edge Function
+      const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/ai-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: userMsg,
+          clientId: clientId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
+      }
+      
+      const data = await response.json();
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString() + "a", role: "assistant", content: data.reply }
+      ]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString() + "a", role: "assistant", content: "Sorry, I'm having trouble connecting right now. Please try again later." }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -87,6 +123,24 @@ const ChatbotWidget = () => {
               }}>{msg.content}</div>
             </div>
           ))}
+          {isLoading && (
+            <div style={{ marginBottom: 8, alignSelf: 'flex-start' }}>
+              <div style={{
+                background: '#f1f5f9',
+                color: '#222',
+                borderRadius: 12,
+                padding: '8px 14px',
+                maxWidth: 260,
+                fontSize: 14,
+                display: 'flex',
+                gap: 4,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite' }}></span>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite', animationDelay: '0.3s' }}></span>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite', animationDelay: '0.6s' }}></span>
+              </div>
+            </div>
+          )}
         </div>
         {/* Input */}
         <div style={{ display: 'flex', borderTop: '1px solid #eee', background: '#fff', padding: 8 }}>
@@ -97,14 +151,35 @@ const ChatbotWidget = () => {
             placeholder={placeholderText}
             style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, padding: 8, borderRadius: 8, background: '#f9f9f9' }}
             onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
+            disabled={isLoading}
           />
           <button
             onClick={handleSend}
-            style={{ marginLeft: 8, background: primaryColor, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}
+            style={{ 
+              marginLeft: 8, 
+              background: primaryColor, 
+              color: '#fff', 
+              border: 'none', 
+              borderRadius: 8, 
+              padding: '8px 16px', 
+              fontWeight: 600, 
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.7 : 1
+            }}
+            disabled={isLoading}
           >
             Send
           </button>
         </div>
+        <style>
+          {`
+            @keyframes pulse {
+              0% { opacity: 0.4; }
+              50% { opacity: 1; }
+              100% { opacity: 0.4; }
+            }
+          `}
+        </style>
       </div>
     )
   );

@@ -25,13 +25,33 @@ serve(async (req) => {
     });
   }
 
-  // Fetch training data for context
+  // Fetch ALL training data for context (including all types)
   const { data: trainingData } = await supabase
     .from("training_data")
-    .select("content")
+    .select("*")
     .eq("client_id", clientId);
 
-  const context = trainingData?.map((td: any) => td.content).join("\n") || "";
+  // Process different types of training data
+  let context = "";
+  if (trainingData && trainingData.length > 0) {
+    for (const item of trainingData) {
+      // Add source information
+      context += `--- ${item.name} ---\n`;
+      
+      // Add content based on type
+      if (item.content) {
+        context += `${item.content}\n\n`;
+      }
+      
+      if (item.url) {
+        context += `Source URL: ${item.url}\n\n`;
+      }
+      
+      if (item.file_url) {
+        context += `Document: ${item.file_url}\n\n`;
+      }
+    }
+  }
 
   // Use the client's OpenAI key, or fallback to a default (if you want)
   const openai = new OpenAI({
@@ -43,7 +63,15 @@ serve(async (req) => {
     const completion = await openai.chat.completions.create({
       model: client.model || "gpt-3.5-turbo",
       messages: [
-        { role: "system", content: `You are a helpful assistant for ${client.name}. Here is some context about the client:\n${context}` },
+        { 
+          role: "system", 
+          content: `You are a helpful assistant for ${client.name}. 
+Use the following information to answer questions about the client and their products/services.
+If the information doesn't contain an answer to the user's question, be honest and say you don't know.
+
+CLIENT INFORMATION:
+${context}` 
+        },
         { role: "user", content: message }
       ],
       max_tokens: 500,
