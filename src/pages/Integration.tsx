@@ -54,7 +54,7 @@ const Integration = () => {
     const scriptCode = `<script>
   (function() {
     const script = document.createElement('script');
-    script.src = 'https://website-whisper-ai-builder.lovable.app/embed.js';
+    script.src = 'https://noahung.github.io/ai-chatbot-master/embed.js';
     script.async = true;
     script.dataset.clientId = '${client.id}';
     script.dataset.primaryColor = '${client.settings.primaryColor}';
