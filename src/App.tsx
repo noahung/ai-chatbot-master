@@ -26,7 +26,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename="/ai-chatbot-master">
         <AuthProvider>
           <ChatbotProvider>
             <Routes>
