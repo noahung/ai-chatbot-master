@@ -1,73 +1,111 @@
-# Welcome to your Lovable project
+# AI Chatbot Widget
 
-## Project info
+A customizable, embeddable AI chatbot widget for your website. This project provides a simple way to add an AI-powered chatbot to any website with minimal code.
 
-**URL**: https://lovable.dev/projects/d79afd4c-4b24-466f-9b50-8c0d0fafe580
+## Features
 
-## How can I edit this code?
+- 🎨 **Customizable**: Change colors, position, and messaging to match your brand
+- 📱 **Responsive**: Works well on desktop, tablet, and mobile devices
+- 🔌 **Easy Integration**: Just add a single script tag to your website
+- 🤖 **AI-Powered**: Connect to OpenAI's API for intelligent responses
+- 🔒 **Secure**: Your API key stays on your site, not stored on our servers
+- 🌐 **Self-hostable**: Host the widget on your own server or use our CDN
 
-There are several ways of editing your application.
+## Quick Start
 
-**Use Lovable**
+Add this code to your website before the closing `</body>` tag:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d79afd4c-4b24-466f-9b50-8c0d0fafe580) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```html
+<script>
+  (function() {
+    const script = document.createElement('script');
+    script.src = 'https://noahung.github.io/ai-chatbot-master/public/embed.js';
+    script.async = true;
+    script.dataset.clientId = 'YOUR_CLIENT_ID';
+    script.dataset.primaryColor = '#2563eb';
+    script.dataset.secondaryColor = '#ffffff';
+    script.dataset.position = 'bottom-right';
+    script.dataset.welcomeMessage = "Hello! How can I help you today?";
+    script.dataset.placeholderText = "Ask me anything...";
+    script.dataset.chatbotName = "AI Assistant";
+    script.dataset.apiKey = 'YOUR_OPENAI_API_KEY';
+    script.dataset.model = 'gpt-3.5-turbo';
+    document.head.appendChild(script);
+  })();
+</script>
 ```
 
-**Edit a file directly in GitHub**
+## Configuration Options
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Option | Description | Default |
+| ------ | ----------- | ------- |
+| `clientId` | Your unique client identifier | Required |
+| `primaryColor` | Main color for the chatbot (hex code) | `#2563eb` |
+| `secondaryColor` | Background color for the chat window | `#ffffff` |
+| `position` | Where the chatbot appears (bottom-right, bottom-left, top-right, top-left) | `bottom-right` |
+| `welcomeMessage` | Initial message shown to users | `Hello! How can I help you today?` |
+| `placeholderText` | Text shown in the input field | `Ask me anything...` |
+| `chatbotName` | Name displayed in the chatbot header | `AI Assistant` |
+| `apiKey` | Your OpenAI API key | Required for AI responses |
+| `model` | The OpenAI model to use | `gpt-3.5-turbo` |
 
-**Use GitHub Codespaces**
+## Deployment Options
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 1. GitHub Pages (Recommended)
 
-## What technologies are used for this project?
+1. Fork this repository
+2. Enable GitHub Pages in your repository settings
+3. Update the script URL in your embed code to point to your GitHub Pages URL
 
-This project is built with:
+### 2. Self-hosted
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+1. Download the `embed.js` file
+2. Host it on your own server
+3. Update the script URL in your embed code to point to your server
 
-## How can I deploy this project?
+### 3. Use Supabase Storage
 
-Simply open [Lovable](https://lovable.dev/projects/d79afd4c-4b24-466f-9b50-8c0d0fafe580) and click on Share -> Publish.
+1. Upload the `embed.js` file to your Supabase storage bucket
+2. Make the bucket public
+3. Use the Supabase storage URL in your embed code
 
-## Can I connect a custom domain to my Lovable project?
+## Advanced Usage
 
-Yes, you can!
+### Custom Styling
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+You can further customize the appearance by modifying the CSS variables in the embed.js file.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+### Training Data
+
+To provide your chatbot with specific knowledge:
+
+1. Create a client in your database
+2. Add training data associated with that client
+3. Use the client ID in your embed code
+
+## Development
+
+### Prerequisites
+
+- Node.js 14+
+
+### Local Development
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Start the development server: `npm run dev`
+4. Open `test-chatbot.html` in your browser
+
+### Building for Production
+
+```bash
+npm run build
+```
+
+## License
+
+MIT License - feel free to use this in your projects!
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
