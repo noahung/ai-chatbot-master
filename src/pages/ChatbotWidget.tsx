@@ -22,166 +22,216 @@ const ChatbotWidget = () => {
   const primaryColor = getQueryParam("primaryColor") || "#2563eb";
   const secondaryColor = getQueryParam("secondaryColor") || "#ffffff";
   const position = getQueryParam("position") || "bottom-right";
-  const placeholderText = getQueryParam("placeholderText") || "Ask me anything...";
   const chatbotName = getQueryParam("chatbotName") || "Chat Assistant";
-  const logo = getQueryParam("logo");
+  const logo = getQueryParam("logo") || "";
+  const placeholderText = getQueryParam("placeholderText") || "Ask me anything...";
 
-  // Positioning logic
-  let positionStyles = {};
-  if (position === "bottom-right") {
-    positionStyles = { bottom: 24, right: 24 };
-  } else if (position === "bottom-left") {
-    positionStyles = { bottom: 24, left: 24 };
-  } else if (position === "top-right") {
-    positionStyles = { top: 24, right: 24 };
-  } else if (position === "top-left") {
-    positionStyles = { top: 24, left: 24 };
-  }
-
-  const widgetStyles = {
-    position: "fixed" as const,
-    zIndex: 999999,
-    width: 360,
-    height: 520,
-    borderRadius: 16,
-    boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
-    overflow: "hidden" as const,
-    border: "none",
-    background: secondaryColor,
-    ...positionStyles,
-  };
-
-  const handleSend = async () => {
+  // Handle sending messages
+  const handleSendMessage = async () => {
     if (!message.trim() || isLoading) return;
-    
-    // Add user message
-    const userMsg = message;
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), role: "user", content: userMsg },
-    ]);
+
+    // Add user message to the chat
+    const userMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: message,
+    };
+    setMessages([...messages, userMessage]);
     setMessage("");
     setIsLoading(true);
-    
+
     try {
-      // Call the Supabase Edge Function
+      // Call the Supabase Edge Function for AI responses
       const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/ai-chat', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: userMsg,
+          message: userMessage.content,
           clientId: clientId
         })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to get AI response');
       }
-      
+
       const data = await response.json();
-      setMessages((prev) => [
+      
+      // Add AI response to chat
+      setMessages(prev => [
         ...prev,
-        { id: Date.now().toString() + "a", role: "assistant", content: data.reply }
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: data.reply || "I'm sorry, I couldn't process your request at this time.",
+        }
       ]);
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      setMessages((prev) => [
+      console.error("Error getting AI response:", error);
+      
+      // Add error message to chat
+      setMessages(prev => [
         ...prev,
-        { id: Date.now().toString() + "a", role: "assistant", content: "Sorry, I'm having trouble connecting right now. Please try again later." }
+        {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: "I'm sorry, I'm having trouble connecting right now. Please try again later.",
+        }
       ]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Toggle chat open/closed
+  const toggleChat = () => {
+    setChatOpen(!chatOpen);
+  };
+
   return (
-    chatOpen && (
-      <div style={widgetStyles}>
-        {/* Header */}
-        <div style={{ background: primaryColor, color: '#fff', padding: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {logo ? (
-            <img src={logo} alt="Logo" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
-          ) : (
-            <span style={{ fontWeight: 700, fontSize: 20 }}>💬</span>
-          )}
-          <span style={{ fontWeight: 600, fontSize: 16 }}>{chatbotName}</span>
-        </div>
-        {/* Messages */}
-        <div style={{ flex: 1, background: secondaryColor, padding: 12, height: 370, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {messages.map((msg, i) => (
-            <div key={msg.id} style={{ marginBottom: 8, alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-              <div style={{
-                background: msg.role === 'user' ? primaryColor : '#f1f5f9',
-                color: msg.role === 'user' ? '#fff' : '#222',
-                borderRadius: 12,
-                padding: '8px 14px',
-                maxWidth: 260,
-                fontSize: 14,
-                boxShadow: msg.role === 'user' ? '0 1px 4px rgba(0,0,0,0.08)' : undefined,
-              }}>{msg.content}</div>
-            </div>
-          ))}
-          {isLoading && (
-            <div style={{ marginBottom: 8, alignSelf: 'flex-start' }}>
-              <div style={{
-                background: '#f1f5f9',
-                color: '#222',
-                borderRadius: 12,
-                padding: '8px 14px',
-                maxWidth: 260,
-                fontSize: 14,
-                display: 'flex',
-                gap: 4,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite' }}></span>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite', animationDelay: '0.3s' }}></span>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: primaryColor, animation: 'pulse 1s infinite', animationDelay: '0.6s' }}></span>
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Input */}
-        <div style={{ display: 'flex', borderTop: '1px solid #eee', background: '#fff', padding: 8 }}>
-          <input
-            type="text"
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder={placeholderText}
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, padding: 8, borderRadius: 8, background: '#f9f9f9' }}
-            onKeyDown={e => { if (e.key === 'Enter') handleSend(); }}
-            disabled={isLoading}
-          />
-          <button
-            onClick={handleSend}
-            style={{ 
-              marginLeft: 8, 
-              background: primaryColor, 
-              color: '#fff', 
-              border: 'none', 
-              borderRadius: 8, 
-              padding: '8px 16px', 
-              fontWeight: 600, 
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              opacity: isLoading ? 0.7 : 1
-            }}
-            disabled={isLoading}
+    <div className={`fixed ${position} mb-4 mr-4 z-50`}>
+      {/* Chat container */}
+      {chatOpen && (
+        <div 
+          className="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col"
+          style={{ width: "350px", height: "500px" }}
+        >
+          {/* Chat header */}
+          <div 
+            className="p-3 flex items-center justify-between"
+            style={{ backgroundColor: primaryColor, color: secondaryColor }}
           >
-            Send
-          </button>
+            <div className="flex items-center">
+              {logo && (
+                <img src={logo} alt="Logo" className="w-6 h-6 mr-2 rounded" />
+              )}
+              <span className="font-medium">{chatbotName}</span>
+            </div>
+            <button 
+              onClick={toggleChat}
+              className="text-white hover:text-gray-200 focus:outline-none"
+            >
+              ✕
+            </button>
+          </div>
+          
+          {/* Chat messages */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {messages.map((msg) => (
+              <div 
+                key={msg.id} 
+                className={`mb-4 flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div 
+                  className={`max-w-[80%] rounded-lg p-3 ${
+                    msg.role === 'user' 
+                      ? 'bg-primary text-white' 
+                      : 'bg-gray-100 text-gray-800'
+                  }`}
+                  style={msg.role === 'user' ? { backgroundColor: primaryColor, color: secondaryColor } : {}}
+                >
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start mb-4">
+                <div className="bg-gray-100 rounded-lg p-3 text-gray-500 flex items-center">
+                  <div className="dot-typing"></div>
+                  <span className="ml-2">AI is typing...</span>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Chat input */}
+          <div className="p-3 border-t">
+            <div className="flex">
+              <input
+                type="text"
+                placeholder={placeholderText}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                className="flex-1 border rounded-l-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!message.trim() || isLoading}
+                className="px-4 py-2 rounded-r-md text-white"
+                style={{ backgroundColor: primaryColor }}
+              >
+                {isLoading ? "..." : "Send"}
+              </button>
+            </div>
+          </div>
         </div>
-        <style>
-          {`
-            @keyframes pulse {
-              0% { opacity: 0.4; }
-              50% { opacity: 1; }
-              100% { opacity: 0.4; }
-            }
-          `}
-        </style>
-      </div>
-    )
+      )}
+      
+      {/* Chat toggle button */}
+      {!chatOpen && (
+        <button
+          onClick={toggleChat}
+          className="rounded-full shadow-lg p-4 text-white"
+          style={{ backgroundColor: primaryColor }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        </button>
+      )}
+      
+      {/* CSS for typing animation */}
+      <style>
+        {`
+        .dot-typing {
+          position: relative;
+          left: -9999px;
+          width: 6px;
+          height: 6px;
+          border-radius: 5px;
+          background-color: #9880ff;
+          color: #9880ff;
+          box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          animation: dot-typing 1.5s infinite linear;
+        }
+
+        @keyframes dot-typing {
+          0% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+          16.667% {
+            box-shadow: 9984px -10px 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+          33.333% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+          50% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px -10px 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+          66.667% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+          83.333% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px -10px 0 0 0 #9880ff;
+          }
+          100% {
+            box-shadow: 9984px 0 0 0 #9880ff, 9999px 0 0 0 #9880ff, 10014px 0 0 0 #9880ff;
+          }
+        }
+        `}
+      </style>
+    </div>
   );
 };
 

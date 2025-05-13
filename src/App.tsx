@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import Dashboard from "./pages/Dashboard";
 import Clients from "./pages/Clients";
 import ClientDetail from "./pages/ClientDetail";
+import ClientEdit from "./pages/ClientEdit";
 import TrainingData from "./pages/TrainingData";
 import ChatbotSettings from "./pages/ChatbotSettings";
 import Integration from "./pages/Integration";
@@ -40,6 +41,7 @@ const App = () => (
                 <Route index element={<Dashboard />} />
                 <Route path="clients" element={<Clients />} />
                 <Route path="clients/:id" element={<ClientDetail />} />
+                <Route path="clients/:id/edit" element={<ClientEdit />} />
                 <Route path="clients/:id/training" element={<TrainingData />} />
                 <Route path="clients/:id/settings" element={<ChatbotSettings />} />
                 <Route path="clients/:id/integration" element={<Integration />} />

@@ -53,13 +53,15 @@ import {
   FileSymlink,
   Check,
   Loader2,
-  Code as CodeIcon
+  Code as CodeIcon,
+  Eye
 } from "lucide-react";
 import { TrainingDataType, TrainingItem } from "@/context/ChatbotContext";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { createClient } from '@supabase/supabase-js';
+import TrainingDataPreview from "@/components/TrainingDataPreview";
 
 const supabaseUrl = 'https://rlwmcbdqfusyhhqgwxrz.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsd21jYmRxZnVzeWhocWd3eHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMzAzMzMsImV4cCI6MjA2MjcwNjMzM30.96HbYy6EfaY2snPjvcO6hT2E-pVCFOvSz5anC3GYVQ8';
@@ -82,6 +84,8 @@ const TrainingData = () => {
   const [editingItem, setEditingItem] = useState<TrainingItem | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [selectedItem, setSelectedItem] = useState<TrainingItem | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   if (!client) {
     return (
@@ -199,7 +203,12 @@ const TrainingData = () => {
     setIsEditDialogOpen(true);
   };
   
-  // Mock training process for demonstration
+  const handleViewProcessedData = (item: TrainingItem) => {
+    setSelectedItem(item);
+    setIsPreviewOpen(true);
+  };
+  
+  // Process training data for AI
   const mockTrainingProcess = async () => {
     setIsTraining(true);
     setTrainingProgress(0);
@@ -224,31 +233,37 @@ const TrainingData = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          clientId: client.id
+          clientId: id
         })
-      }).catch(() => null); // Catch network errors
+      });
       
-      // Even if API call fails, we'll show success to the user
-      // In a production app, you'd want to show the actual error
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('Training process result:', result);
       
       // Complete the progress bar
       setTrainingProgress(100);
-      setTimeout(() => {
-        setIsTraining(false);
-        toast.success("Training completed successfully", {
-          description: "AI model has been updated with new data."
-        });
-      }, 500);
-    } catch (err) {
-      console.error("Training error:", err);
-      // Still show success to the user for demo purposes
-      setTrainingProgress(100);
-      setTimeout(() => {
-        setIsTraining(false);
-        toast.success("Training completed successfully", {
-          description: "AI model has been updated with new data."
-        });
-      }, 500);
+      
+      // Show success message
+      toast.success('Training completed successfully', {
+        description: `Processed ${result.itemsProcessed} training items.`
+      });
+    } catch (error) {
+      console.error('Error processing training data:', error);
+      
+      // Show error message
+      toast.error('Training process failed', {
+        description: error instanceof Error ? error.message : 'Unknown error'
+      });
+      
+      // Reset progress
+      setTrainingProgress(0);
+    } finally {
+      clearInterval(interval);
+      setIsTraining(false);
     }
   };
 
@@ -456,6 +471,28 @@ const TrainingData = () => {
               </DialogContent>
             </Dialog>
           )}
+
+          {/* Preview Dialog */}
+          {selectedItem && (
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+              <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Processed Training Data</DialogTitle>
+                  <DialogDescription>
+                    View the extracted and processed information from this training data source.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <TrainingDataPreview trainingItem={selectedItem} />
+                
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
 
@@ -502,6 +539,11 @@ const TrainingData = () => {
                           <Badge variant="outline" className="ml-2">
                             {getTypeLabel(item.type)}
                           </Badge>
+                          {item.content && item.content.length > 100 && (
+                            <Badge variant="secondary" className="ml-2">
+                              Processed
+                            </Badge>
+                          )}
                         </div>
                         
                         {item.type === 'url' && (
@@ -528,6 +570,12 @@ const TrainingData = () => {
                       </div>
                     </div>
                     <div className="flex gap-1">
+                      {item.content && item.content.length > 100 && (
+                        <Button variant="ghost" size="sm" onClick={() => handleViewProcessedData(item)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
                       <Button variant="ghost" size="sm" onClick={() => handleEditItem(item)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -560,6 +608,20 @@ const TrainingData = () => {
                     </div>
                   </div>
                 ))}
+
+                <div className="flex justify-end">
+                  <Button onClick={mockTrainingProcess} disabled={isTraining}>
+                    {isTraining ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="mr-2 h-4 w-4" /> Process All Training Data
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="text-center py-12 border border-dashed rounded-md">

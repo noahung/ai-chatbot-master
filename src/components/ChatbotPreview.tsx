@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Client } from "@/context/ChatbotContext";
+import { useParams } from "react-router-dom";
+import { useChatbot } from "@/context/ChatbotContext";
 
 interface ChatMessage {
   id: string;
@@ -12,11 +14,33 @@ interface ChatMessage {
 }
 
 interface ChatbotPreviewProps {
-  client: Client;
+  client?: Client;
   className?: string;
 }
 
-const ChatbotPreview = ({ client, className }: ChatbotPreviewProps) => {
+const ChatbotPreview = ({ client: propClient, className }: ChatbotPreviewProps) => {
+  const { id } = useParams<{ id: string }>();
+  const { getClient } = useChatbot();
+  
+  // If client is not passed as prop, try to get it from URL params
+  const [client, setClient] = useState<Client | undefined>(propClient);
+  
+  useEffect(() => {
+    if (!propClient && id) {
+      const foundClient = getClient(id);
+      setClient(foundClient);
+    }
+  }, [propClient, id, getClient]);
+  
+  // If no client is available, show a placeholder
+  if (!client) {
+    return (
+      <div className={`border rounded-lg overflow-hidden shadow-sm h-[500px] flex flex-col items-center justify-center ${className || ""}`}>
+        <p className="text-gray-500">Client not found or no client specified</p>
+      </div>
+    );
+  }
+  
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -84,7 +108,39 @@ const ChatbotPreview = ({ client, className }: ChatbotPreviewProps) => {
         { role: "user", content: userMessage.content }
       ];
       
-      // If client has an API key, use it to call OpenAI
+      // Try to use Supabase Edge Function first
+      try {
+        const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/ai-chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: userMessage.content,
+            clientId: client.id
+          })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const aiReply = data.reply || "Sorry, I couldn't generate a response.";
+          
+          // Add AI response
+          const botMessage: ChatMessage = {
+            id: Date.now().toString(),
+            role: "assistant",
+            content: aiReply,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, botMessage]);
+          return;
+        }
+      } catch (error) {
+        console.error("Edge function error:", error);
+        // Fall through to other methods if edge function fails
+      }
+      
+      // If client has an API key, use it to call OpenAI directly
       if (client.apiKey) {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -115,11 +171,32 @@ const ChatbotPreview = ({ client, className }: ChatbotPreviewProps) => {
         };
         setMessages(prev => [...prev, botMessage]);
       } else {
-        // Fallback to mock responses if no API key
-        // Basic keyword detection for demo purposes
+        // Fallback to smart mock responses if no API key
         let response = "I'm an AI assistant trained to help with questions about this company and its products or services.";
         
         const lowercaseMessage = userMessage.content.toLowerCase();
+        
+        // Extract information from training data if available
+        if (client.trainingData && client.trainingData.length > 0) {
+          // Try to find relevant information in training data
+          const relevantData = client.trainingData.find(item => {
+            if (!item.content) return false;
+            const content = item.content.toLowerCase();
+            
+            // Check if content contains keywords from user message
+            const words = lowercaseMessage.split(' ')
+              .filter(word => word.length > 3) // Only use significant words
+              .map(word => word.replace(/[.,?!;:]/g, '')); // Remove punctuation
+            
+            return words.some(word => content.includes(word));
+          });
+          
+          if (relevantData?.content) {
+            response = `Based on our information: ${relevantData.content.substring(0, 200)}...`;
+          }
+        }
+        
+        // Keyword-based responses as fallback
         if (lowercaseMessage.includes("price") || lowercaseMessage.includes("cost")) {
           response = "Our pricing varies depending on the specific product or service you're interested in. Could you let me know which product you're asking about?";
         } else if (lowercaseMessage.includes("contact") || lowercaseMessage.includes("support")) {
