@@ -25,7 +25,7 @@ async function generateEmbedding(text, apiKey) {
     });
 
     if (!response.ok) {
-      console.error(`Failed to generate embedding: ${response.status}`);
+      console.error(`Failed to generate embedding: ${response.status} - ${await response.text()}`);
       return null;
     }
 
@@ -41,9 +41,9 @@ async function generateEmbedding(text, apiKey) {
 async function parseWithOpenAI(text, apiKey, task) {
   try {
     const prompt = {
-      'contact': `Extract contact information from the following text. Return a JSON object with fields: emails (array of strings), phones (array of strings), addresses (array of strings). Text: ${text}`,
-      'products': `Extract product information from the following text. Return a JSON array of objects, each with fields: name (string), price (string), description (string). Text: ${text}`,
-      'faqs': `Extract FAQ information from the following text. Return a JSON array of objects, each with fields: question (string), answer (string). Text: ${text}`
+      'contact': `Extract contact information from the following text in JSON format: { "emails": [], "phones": [], "addresses": [] }. Return only the raw JSON object without any Markdown or code block formatting (e.g., do not include \`\`\`json or similar). Be precise and only include valid entries. Text: ${text}`,
+      'products': `Extract product information from the following text in JSON format as an array of objects: [{ "name": "", "price": "", "description": "" }]. Return only the raw JSON array without any Markdown or code block formatting. Only include complete entries. Text: ${text}`,
+      'faqs': `Extract FAQ information from the following text in JSON format as an array of objects: [{ "question": "", "answer": "" }]. Return only the raw JSON array without any Markdown or code block formatting. Ensure questions and answers are paired correctly. Text: ${text}`
     }[task];
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -60,16 +60,27 @@ async function parseWithOpenAI(text, apiKey, task) {
     });
 
     if (!response.ok) {
-      console.error(`Failed to parse with OpenAI for ${task}: ${response.status}`);
+      console.error(`Failed to parse with OpenAI for ${task}: ${response.status} - ${await response.text()}`);
       return null;
     }
 
     const data = await response.json();
-    const result = JSON.parse(data.choices[0].message.content);
+    let rawContent = data.choices[0].message.content.trim();
+
+    // Strip Markdown code block formatting if present
+    rawContent = rawContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+
+    // Parse the cleaned content as JSON
+    const result = JSON.parse(rawContent);
     return result;
   } catch (err) {
     console.error(`Error parsing with OpenAI for ${task}:`, err);
-    return null;
+    // Return default values if parsing fails
+    return {
+      'contact': { emails: [], phones: [], addresses: [] },
+      'products': [],
+      'faqs': []
+    }[task];
   }
 }
 
@@ -199,13 +210,13 @@ serve(async (req) => {
             console.error(`Failed to parse HTML for URL ${item.url}`);
             continue;
           }
-          // Improved extraction: remove unwanted elements globally
-          ["script", "style", "nav", "header", "footer", "noscript", "svg"].forEach(sel => {
-            document.querySelectorAll(sel).forEach(el => el.remove());
-          });
-          // Get all visible text from body
-          content = document.body ? document.body.textContent : "";
-          content = content ? content.replace(/\s+/g, " ").trim() : "";
+
+          const mainElement = document.querySelector("article") || document.querySelector("main") || document.body || document.querySelector("footer");
+          if (mainElement) {
+            const scriptsAndStyles = mainElement.querySelectorAll("script, style, nav, header");
+            scriptsAndStyles.forEach((el) => el.remove());
+            content = mainElement.textContent || "";
+          }
         } else if (item.type === 'pdf' && item.file_url) {
           content = await extractTextFromPDF(item.file_url);
         } else if (item.type === 'text' && item.content) {
@@ -225,7 +236,7 @@ serve(async (req) => {
           }
 
           // Chunk 1: Contact Info (update original item)
-          let contactContent = `CONTENT:\nContact details extracted from source.\n`;
+          let contactContent = `PHONE NUMBER QUERY MATCH:\nCONTENT:\nContact details extracted from source.\n`;
           if (contactInfo.emails.length > 0 || contactInfo.phones.length > 0 || contactInfo.addresses.length > 0) {
             contactContent += `\nCONTACT INFORMATION:\n`;
             if (contactInfo.emails.length > 0) contactContent += `Emails: ${contactInfo.emails.join(', ')}\n`;
@@ -237,6 +248,9 @@ serve(async (req) => {
           let contactEmbedding = null;
           if (openAiApiKey) {
             contactEmbedding = await generateEmbedding(contactContent, openAiApiKey);
+            if (!contactEmbedding) {
+              console.error(`Failed to generate embedding for item ${item.id}`);
+            }
           }
 
           // Update original item with contact info and embedding
