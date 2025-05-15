@@ -289,12 +289,17 @@ const TrainingData = () => {
     }, 500);
     
     try {
+      // Get the user's JWT access token
+      const session = await supabase.auth.getSession();
+      const accessToken = session.data.session?.access_token;
+      
       // Make a real API call to process the training data
       const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/process-training', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsd21jYmRxZnVzeWhocWd3eHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMzAzMzMsImV4cCI6MjA2MjcwNjMzM30.96HbYy6EfaY2snPjvcO6hT2E-pVCFOvSz5anC3GYVQ8'
+          'apikey': supabaseKey,
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
         },
         body: JSON.stringify({ clientId: id })
       });
