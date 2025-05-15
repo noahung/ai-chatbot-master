@@ -1,27 +1,43 @@
-
-import { Navigate, useLocation } from "react-router-dom";
+import { ReactNode, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { Loader2 } from "lucide-react";
 
 interface RequireAuthProps {
-  children: React.ReactNode;
+  children: ReactNode;
+  requireAdmin?: boolean;
 }
 
-const RequireAuth = ({ children }: RequireAuthProps) => {
+const RequireAuth = ({ children, requireAdmin = false }: RequireAuthProps) => {
   const { user, loading } = useAuth();
-  const location = useLocation();
+  const navigate = useNavigate();
+  const isAdmin = user?.user_metadata?.role === 'admin';
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate("/auth");
+    }
+    
+    if (!loading && requireAdmin && !isAdmin) {
+      navigate("/dashboard");
+    }
+  }, [user, loading, navigate, requireAdmin, isAdmin]);
 
   if (loading) {
-    // You could add a loading spinner here
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-lg text-gray-600">Loading...</p>
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2 text-lg">Loading...</span>
       </div>
     );
   }
 
   if (!user) {
-    // Redirect to the auth page if not logged in
-    return <Navigate to="/auth" state={{ from: location }} replace />;
+    return null; // Will redirect in useEffect
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return null; // Will redirect in useEffect
   }
 
   return <>{children}</>;

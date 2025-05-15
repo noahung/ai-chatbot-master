@@ -61,6 +61,7 @@ const Integration = () => {
     const chatbotName = settings.name || 'AI Assistant';
     const logo = settings.logo || '';
     const apiKey = client.apiKey || '';
+    const model = client.model || 'gpt-3.5-turbo';
 
     const scriptCode = `<script>
   (function() {
@@ -76,6 +77,7 @@ const Integration = () => {
     script.dataset.chatbotName = "${chatbotName.replace(/"/g, '&quot;')}";
     script.dataset.logo = '${logo}';
     script.dataset.apiKey = '${apiKey}';
+    script.dataset.model = '${model}';
     document.head.appendChild(script);
   })();
 </script>`;

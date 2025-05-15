@@ -20,12 +20,15 @@
   var supabaseUrl = 'https://rlwmcbdqfusyhhqgwxrz.supabase.co';
   var supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsd21jYmRxZnVzeWhocWd3eHJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxMzAzMzMsImV4cCI6MjA2MjcwNjMzM30.96HbYy6EfaY2snPjvcO6hT2E-pVCFOvSz5anC3GYVQ8';
 
+  // Session storage keys
+  const CHAT_MESSAGES_KEY = 'ai_chatbot_messages';
+  const CHAT_VISIBILITY_KEY = 'ai_chatbot_visibility';
+
   // Fetch client training data
   async function fetchClientData() {
     if (!clientId) return;
     
     try {
-      // Fetch client info
       const clientResponse = await fetch(`${supabaseUrl}/rest/v1/clients?id=eq.${clientId}&select=id,name`, {
         headers: {
           'apikey': supabaseAnonKey,
@@ -43,7 +46,6 @@
         clientName = clientData[0].name;
       }
       
-      // Fetch training data
       const trainingResponse = await fetch(`${supabaseUrl}/rest/v1/training_data?client_id=eq.${clientId}&select=*`, {
         headers: {
           'apikey': supabaseAnonKey,
@@ -78,7 +80,6 @@
   chatContainer.style.overflow = 'hidden';
   chatContainer.style.border = 'none';
   chatContainer.style.background = secondaryColor;
-  chatContainer.style.display = 'flex'; // Start with chat open
   chatContainer.style.flexDirection = 'column';
 
   // Positioning
@@ -109,7 +110,6 @@
   toggleButton.style.border = 'none';
   toggleButton.style.cursor = 'pointer';
   toggleButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-  toggleButton.style.display = 'none'; // Hide toggle button initially since chat is open
   toggleButton.style.alignItems = 'center';
   toggleButton.style.justifyContent = 'center';
   toggleButton.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
@@ -193,35 +193,49 @@
   `;
   document.head.appendChild(style);
 
-  // Chat functionality
-  var messages = [
+  // Initialize messages from sessionStorage or with welcome message
+  var messages = JSON.parse(sessionStorage.getItem(CHAT_MESSAGES_KEY)) || [
     {
       role: "assistant",
       content: welcomeMessage
     }
   ];
 
-  // Initialize chat with welcome message
+  // Initialize chat with stored or default messages
   function initChat() {
     var messagesContainer = document.getElementById('ai-chatbot-messages');
     messagesContainer.innerHTML = '';
     
-    // Add welcome message
-    var welcomeDiv = document.createElement('div');
-    welcomeDiv.style.marginBottom = '8px';
-    welcomeDiv.style.alignSelf = 'flex-start';
-    welcomeDiv.innerHTML = `
-      <div style="background: #f1f5f9; color: #222; border-radius: 12px; padding: 8px 14px; max-width: 260px; font-size: 14px;">
-        ${welcomeMessage}
-      </div>
-    `;
-    messagesContainer.appendChild(welcomeDiv);
+    messages.forEach(message => {
+      var messageDiv = document.createElement('div');
+      messageDiv.style.marginBottom = '8px';
+      messageDiv.style.alignSelf = message.role === 'user' ? 'flex-end' : 'flex-start';
+      messageDiv.innerHTML = `
+        <div style="
+          background: ${message.role === 'user' ? primaryColor : '#f1f5f9'}; 
+          color: ${message.role === 'user' ? '#fff' : '#222'}; 
+          border-radius: 12px; 
+          padding: 8px 14px; 
+          max-width: 260px; 
+          font-size: 14px;
+          box-shadow: ${message.role === 'user' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'};
+        ">
+          ${message.content}
+        </div>
+      `;
+      messagesContainer.appendChild(messageDiv);
+    });
     
-    // Fetch client data in the background
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    var isVisible = sessionStorage.getItem(CHAT_VISIBILITY_KEY) !== 'false';
+    chatContainer.style.display = isVisible ? 'flex' : 'none';
+    toggleButton.style.display = isVisible ? 'none' : 'flex';
+    
     fetchClientData();
   }
 
-  // Add message to chat
+  // Add message to chat and save to sessionStorage
   function addMessage(role, content) {
     var messagesContainer = document.getElementById('ai-chatbot-messages');
     var messageDiv = document.createElement('div');
@@ -245,8 +259,8 @@
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
-    // Add to messages array
     messages.push({ role, content });
+    sessionStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(messages));
   }
 
   // Show loading indicator
@@ -279,59 +293,21 @@
     }
   }
 
-  // Build system prompt with training data context
-  function buildSystemPrompt() {
-    let systemPrompt = `You are a helpful assistant for ${clientName}.`;
-    
-    // Add training data context if available
-    if (clientTrainingData && clientTrainingData.length > 0) {
-      systemPrompt += `\nUse the following information to answer questions about the client and their products/services.`;
-      systemPrompt += `\nIf the information doesn't contain an answer to the user's question, be honest and say you don't know.`;
-      systemPrompt += `\n\nCLIENT INFORMATION:`;
-      
-      // Process different types of training data
-      clientTrainingData.forEach(item => {
-        systemPrompt += `\n\n--- ${item.name} ---\n`;
-        
-        if (item.content) {
-          systemPrompt += `${item.content}\n`;
-        }
-        
-        if (item.url) {
-          systemPrompt += `Source URL: ${item.url}\n`;
-        }
-        
-        if (item.file_url) {
-          systemPrompt += `Document: ${item.file_url}\n`;
-        }
-      });
-    }
-    
-    return systemPrompt;
-  }
-
-  // Send message to OpenAI
+  // Send message to OpenAI or Supabase Edge Function
   async function sendMessage(message) {
     if (!message.trim()) return;
-    
-    // Add user message to chat
+
     addMessage('user', message);
-    
-    // Show loading
     showLoading();
-    
+
     try {
-      // If API key is provided, make direct call to OpenAI
       if (apiKey) {
-        console.log("Making API call with key:", apiKey.substring(0, 5) + "...");
-        
-        // Build messages array with system prompt containing training data
-        const systemPrompt = buildSystemPrompt();
+        // Use OpenAI API directly if API key is present
+        const systemPrompt = `You are a helpful assistant for ${clientName}.`;
         const messageHistory = [
           { role: "system", content: systemPrompt },
-          ...messages.filter(m => m.role !== "system") // Exclude any previous system messages
+          ...messages.filter(m => m.role !== "system")
         ];
-        
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -344,43 +320,37 @@
             max_tokens: 500
           })
         });
-        
         if (!response.ok) {
           const errorData = await response.text();
           console.error("OpenAI API error:", errorData);
           throw new Error(`OpenAI API error: ${response.status}`);
         }
-        
         const data = await response.json();
         const reply = data.choices[0]?.message?.content || "Sorry, I couldn't generate a response.";
-        
-        // Hide loading and add AI reply
         hideLoading();
         addMessage('assistant', reply);
       } else {
-        // Try to use the Supabase Edge Function as fallback
+        // Always use your Supabase Edge Function if no API key
         try {
-          const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/ai-chat', {
+          const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/process-training', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'apikey': supabaseAnonKey
             },
             body: JSON.stringify({
               message: message,
               clientId: clientId
             })
           });
-          
           if (!response.ok) {
             throw new Error('Edge function error');
           }
-          
           const data = await response.json();
           hideLoading();
           addMessage('assistant', data.reply);
         } catch (edgeFunctionError) {
           console.error('Edge function error:', edgeFunctionError);
-          // Final fallback message
           setTimeout(() => {
             hideLoading();
             addMessage('assistant', "I'm sorry, but I need an API key to provide intelligent responses. Please configure the chatbot with a valid OpenAI API key.");
@@ -394,24 +364,23 @@
     }
   }
 
-  // Initialize chat immediately
+  // Initialize chat
   initChat();
   
-  // Set up event listeners directly (without DOMContentLoaded)
-  // Toggle chat visibility
+  // Set up event listeners
   document.getElementById('ai-chatbot-toggle').addEventListener('click', function() {
     var chatContainer = document.getElementById('ai-chatbot-container');
     chatContainer.style.display = 'flex';
     this.style.display = 'none';
+    sessionStorage.setItem(CHAT_VISIBILITY_KEY, 'true');
   });
   
-  // Close chat
   document.getElementById('ai-chatbot-close').addEventListener('click', function() {
     document.getElementById('ai-chatbot-container').style.display = 'none';
     document.getElementById('ai-chatbot-toggle').style.display = 'flex';
+    sessionStorage.setItem(CHAT_VISIBILITY_KEY, 'false');
   });
   
-  // Send message on button click
   document.getElementById('ai-chatbot-send').addEventListener('click', function() {
     var input = document.getElementById('ai-chatbot-input');
     var message = input.value;
@@ -422,7 +391,6 @@
     }
   });
   
-  // Send message on Enter key
   document.getElementById('ai-chatbot-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       var message = this.value;
@@ -433,4 +401,4 @@
       }
     }
   });
-})(); 
+})();

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export type TrainingDataType = 'text' | 'pdf' | 'url' | 'table';
 
@@ -47,6 +48,7 @@ interface ChatbotContextType {
   updateTrainingData: (clientId: string, id: string, data: Partial<TrainingItem>) => Promise<void>;
   deleteTrainingData: (clientId: string, id: string) => Promise<void>;
   updateChatbotSettings: (clientId: string, settings: Partial<ChatbotSettings>) => Promise<void>;
+  updateClientTrainingData: (clientId: string, newData: any[]) => void;
 }
 
 const ChatbotContext = createContext<ChatbotContextType | undefined>(undefined);
@@ -61,6 +63,7 @@ export const useChatbot = () => {
 
 export const ChatbotProvider = ({ children }: { children: ReactNode }) => {
   const [clients, setClients] = useState<Client[]>([]);
+  const { toast } = useToast();
 
   // Fetch all clients and their settings/training data
   const fetchClients = async () => {
@@ -181,10 +184,12 @@ export const ChatbotProvider = ({ children }: { children: ReactNode }) => {
     clientId: string,
     data: Omit<TrainingItem, 'id' | 'clientId' | 'createdAt'>
   ) => {
-    // Always get the current user using getUser()
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
-    if (!user) throw new Error('No authenticated user');
+    if (!user) {
+      toast.error('You must be signed in to add training data.');
+      throw new Error('No authenticated user');
+    }
     const { data: inserted, error } = await (supabase.from('training_data') as any).insert([
       {
         ...data,
@@ -256,6 +261,14 @@ export const ChatbotProvider = ({ children }: { children: ReactNode }) => {
     await fetchClients();
   };
 
+  const updateClientTrainingData = (clientId: string, newData: any[]) => {
+    setClients(prevClients => prevClients.map(client =>
+      client.id === clientId
+        ? { ...client, trainingData: newData.map((t: any) => ({ ...t, createdAt: new Date(t.created_at) })) }
+        : client
+    ));
+  };
+
   return (
     <ChatbotContext.Provider
       value={{
@@ -268,6 +281,7 @@ export const ChatbotProvider = ({ children }: { children: ReactNode }) => {
         updateTrainingData,
         deleteTrainingData,
         updateChatbotSettings,
+        updateClientTrainingData,
       }}
     >
       {children}
