@@ -199,17 +199,21 @@
   }
 
   function buildSystemPrompt(relevantItems) {
-    let systemPrompt = `You are a helpful assistant for ${clientName}. If the user asks for a phone number, extract it directly from the CONTACT INFORMATION section below and return only the phone number (e.g., 01452 347 515). Do not add extra text or explanations. Otherwise, use the information to answer the question.`;
+    let systemPrompt = `You are a helpful assistant for ${clientName}. If the user asks for a phone number, extract it directly from the CONTACT INFORMATION section below and return only the phone number (e.g., 01452 347 515). If the user asks for an address, extract it directly from the CONTACT INFORMATION section below and return only the address (e.g., 123 Example Street, Gloucester, GL1 2AB, UK). Do not add extra text, explanations, or formatting for phone numbers or addresses. If no phone number or address is found, return "No phone number available" or "No address available" respectively. For all other questions, use the information below to provide a concise answer.`;
     if (relevantItems && relevantItems.length > 0) {
+      console.log('Using vector search results for prompt');
       systemPrompt += `\n\nCLIENT INFORMATION:`;
       relevantItems.forEach(item => {
         systemPrompt += `\n\n--- Item ${item.id} ---\n${item.content}\n`;
       });
     } else if (clientTrainingData && clientTrainingData.length > 0) {
+      console.log('Using clientTrainingData for prompt');
       systemPrompt += `\n\nCLIENT INFORMATION:`;
       clientTrainingData.forEach(item => {
         systemPrompt += `\n\n--- Item ${item.id} ---\n${item.content}\n`;
       });
+    } else {
+      console.log('No training data available for prompt');
     }
     return systemPrompt;
   }
