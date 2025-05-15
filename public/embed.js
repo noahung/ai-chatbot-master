@@ -330,9 +330,9 @@
         hideLoading();
         addMessage('assistant', reply);
       } else {
-        // Always use your Supabase Edge Function if no API key
+        // Use Supabase Edge Function for retrieval-augmented chat
         try {
-          const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/process-training', {
+          const response = await fetch('https://rlwmcbdqfusyhhqgwxrz.supabase.co/functions/v1/ai-chat', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -348,7 +348,7 @@
           }
           const data = await response.json();
           hideLoading();
-          addMessage('assistant', data.reply);
+          addMessage('assistant', data.reply || 'Sorry, I could not find an answer in our knowledge base.');
         } catch (edgeFunctionError) {
           console.error('Edge function error:', edgeFunctionError);
           setTimeout(() => {
