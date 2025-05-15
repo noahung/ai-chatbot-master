@@ -199,13 +199,13 @@ serve(async (req) => {
             console.error(`Failed to parse HTML for URL ${item.url}`);
             continue;
           }
-
-          const mainElement = document.querySelector("article") || document.querySelector("main") || document.body || document.querySelector("footer");
-          if (mainElement) {
-            const scriptsAndStyles = mainElement.querySelectorAll("script, style, nav, header");
-            scriptsAndStyles.forEach((el) => el.remove());
-            content = mainElement.textContent || "";
-          }
+          // Improved extraction: remove unwanted elements globally
+          ["script", "style", "nav", "header", "footer", "noscript", "svg"].forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => el.remove());
+          });
+          // Get all visible text from body
+          content = document.body ? document.body.textContent : "";
+          content = content ? content.replace(/\s+/g, " ").trim() : "";
         } else if (item.type === 'pdf' && item.file_url) {
           content = await extractTextFromPDF(item.file_url);
         } else if (item.type === 'text' && item.content) {
